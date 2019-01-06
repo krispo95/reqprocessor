@@ -11,6 +11,7 @@ import (
 )
 
 func main() {
+	var requestsCh = make(chan models.Request, 20)
 	db, err := sqlx.Connect("postgres", "user=postgres dbname=reqprocessor sslmode=disable")
 	if err != nil {
 		log.Fatalln(err)
@@ -36,18 +37,18 @@ func main() {
 			return
 		}
 		fmt.Printf("%+v\n", request)
-		_, err = db.NamedExec(`INSERT INTO request (external_id, name, type, task_text, time) 
-VALUES (:external_id, :name, :type, :task_text, :time)`, &request)
+		request.Status = "В очереди"
+		result, err := db.NamedExec(`INSERT INTO request (external_id, name, type, task_text, work_time, status) 
+VALUES (:external_id, :name, :type, :task_text, :work_time, :status)`, &request)
 		if err != nil {
 			panic(err)
 		}
-		//if count, _ := result.RowsAffected(); count == 0 {
-		//	ctx.JSON(map[string]string{
-		//		"error" : "require fields",
-		//	})
-		//	return
-		//}
-
+		id, err := result.LastInsertId()
+		if err != nil {
+			panic(err)
+		}
+		request.Id = id
+		requestsCh <- request
 		ctx.JSON(request)
 
 	})
